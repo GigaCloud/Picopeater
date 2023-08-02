@@ -1,0 +1,3 @@
+/home/radu/Desktop/Picopeater/Picopeater/build/pioasm/CMakeFiles/rebuild_cache.dir
+/home/radu/Desktop/Picopeater/Picopeater/build/pioasm/CMakeFiles/edit_cache.dir
+/home/radu/Desktop/Picopeater/Picopeater/build/pioasm/CMakeFiles/pioasm.dir
