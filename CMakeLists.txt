@@ -35,6 +35,13 @@ pico_set_program_version(Picopeater "0.1")
 pico_enable_stdio_uart(Picopeater 1)
 pico_enable_stdio_usb(Picopeater 0)
 
+
+target_compile_definitions(Picopeater PRIVATE
+  PICO_DEFAULT_UART_TX_PIN=8
+  PICO_DEFAULT_UART_RX_PIN=9
+  PICO_DEFAULT_UART_INSTANCE=uart1
+)
+
 # Add the standard library to the build
 target_link_libraries(Picopeater
         pico_stdlib)
@@ -46,11 +53,12 @@ target_include_directories(Picopeater PRIVATE
 )
 
 # Add any user requested libraries
-target_link_libraries(Picopeater 
+target_link_libraries(Picopeater
         hardware_pio
         hardware_timer
         hardware_watchdog
         hardware_clocks
+        hardware_adc
         )
 
 pico_add_extra_outputs(Picopeater)
