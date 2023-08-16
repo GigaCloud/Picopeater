@@ -10,37 +10,19 @@
 #include "hardware/irq.h"
 
 #include "debug.h"
+#include "Picopeater.h"
 
-const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+//#include "dsp/filtering_functions_f16.h"
 
-
-#define CLOCK_FREQ 48000000 //Hz
-
-#define DRA_PD_PIN 3
-#define DRA_SQ_PIN 4
-
-#define UART_DRA_ID uart0
-#define UART_DRA_IRQ UART0_IRQ
-#define UART_DRA_TX_PIN 0
-#define UART_DRA_RX_PIN 1
-
-#define DRA_BUFF_SIZE 100
-
-#define ADC_CH_AF_OUT 0
-#define ADC_AF_OUT_PIN (26 + ADC_CH_AF_OUT) //GPIO 26 - CH 0
-
-#define ADC_SAMPLING_RATE 44100 //Hz
-
-#define ABS(X) (X >= 0? X : -X)
-
+#define true 1
+#define false 0 
 
 volatile uint16_t val;
 volatile uint8_t draBuff[100];
 volatile uint16_t adcSample;
 uint16_t neutralAdcValue; 
 
-bool audioOn;
-bool lastAudioOn;
+interruptFlags_t interruptFlags;
 
 static inline void ledToggle(){
     gpio_put(LED_PIN, !gpio_get_out_level(LED_PIN));
@@ -75,24 +57,23 @@ void on_uart_rx(){
 }
 
 
-void squelchCallback(uint gpio, uint32_t events){
+void squelchCallback(uint8_t gpio, uint32_t events){
     if(GPIO_IRQ_EDGE_FALL == events) {
-        audioOn = true;
+        interruptFlags.signalDetected = 1;
         adc_run(true);
     }
 
     if(GPIO_IRQ_EDGE_RISE == events){
-        audioOn = false;
+        interruptFlags.signalEnded = 1;
         adc_run(false);
         gpio_put(LED_PIN, false);
     }
 
 }
 
+
 void init(){
     stdio_init_all();
-
-
     
     gpio_init(LED_PIN);
 
@@ -144,13 +125,12 @@ int main()
 
     neutralAdcValue = adc_read();
 
-    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144.2000,144.2000,0000,1,0000\r\n");
+    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144.8000,144.8000,0000,1,0000\r\n");
     sleep_ms(100);
     uart_puts(UART_DRA_ID, "AT+DMOSETVOLUME=8\r\n");
 
 
     sleep_ms(100);
-
 
     adc_irq_set_enabled(true);
     irq_set_enabled(ADC_IRQ_FIFO, true);
@@ -164,20 +144,21 @@ int main()
     );
 
 
+    
+
     while(1) {
 
 #if DEBUG_ON
-    if(lastAudioOn != audioOn){
-        if(audioOn)
-            printf("Singal detected!\n");
-        else
+        if(interruptFlags.signalDetected){
+            interruptFlags.signalDetected = 0;
+            printf("Signal detected!\n");
+        }
+
+        if(interruptFlags.signalEnded){
+            interruptFlags.signalEnded = 0;
             printf("Signal ended!\n");
-    }
+        }
 #endif
-
-
-
-        lastAudioOn = audioOn;
     }
 
     return 0;
