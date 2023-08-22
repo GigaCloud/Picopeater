@@ -15,6 +15,10 @@
                },
     },
     "files.associations": {
-      "pio.h": "c"
+      "pio.h": "c",
+      "stdio.h": "c",
+      "filtering_functions_f16.h": "c",
+      "system_rp2040.h": "c",
+      "filtering_functions.h": "c"
     },
 }

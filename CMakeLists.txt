@@ -1,5 +1,4 @@
 # Generated Cmake Pico project file
-
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -9,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
-set(PICO_SDK_PATH "/home/radu/Desktop/Picopeater/pico-sdk")
+set(PICO_SDK_PATH "../../pico-sdk")
 
 set(PICO_BOARD pico CACHE STRING "Board type")
 
@@ -21,6 +20,9 @@ if (PICO_SDK_VERSION_STRING VERSION_LESS "1.4.0")
 endif()
 
 project(Picopeater C CXX ASM)
+
+include("./CMSIS/CMakeLists.txt")
+
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -59,6 +61,8 @@ target_link_libraries(Picopeater
         hardware_watchdog
         hardware_clocks
         hardware_adc
+        cmsis_core
+        cmsis_dsp
         )
 
 pico_add_extra_outputs(Picopeater)

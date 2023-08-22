@@ -12,7 +12,7 @@
 #include "debug.h"
 #include "Picopeater.h"
 
-//#include "dsp/filtering_functions_f16.h"
+#include "dsp/filtering_functions.h"
 
 #define true 1
 #define false 0 
@@ -118,14 +118,13 @@ void init(){
 int main()
 {
     init();
-
     printf("Picoprobe 0.1\n");
     //uart_puts(UART_DRA_ID, "AT+DMOCONNECT\r\n");
     // Timer example code - This example fires off the callback after 2000ms
 
     neutralAdcValue = adc_read();
 
-    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144.8000,144.8000,0000,1,0000\r\n");
+    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144. 8000,144.8000,0000,1,0000\r\n");
     sleep_ms(100);
     uart_puts(UART_DRA_ID, "AT+DMOSETVOLUME=8\r\n");
 
@@ -150,7 +149,7 @@ int main()
 
 #if DEBUG_ON
         if(interruptFlags.signalDetected){
-            interruptFlags.signalDetected = 0;
+              interruptFlags.signalDetected = 0;
             printf("Signal detected!\n");
         }
 
