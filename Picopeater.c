@@ -14,15 +14,25 @@
 
 #include "dsp/filtering_functions.h"
 
-#define true 1
-#define false 0 
+#include "ax25.h"
+
+#define SAMPLE_BUFFER_SIZE 39600
+#define BIT_BUFFER_SIZE 1200
+int16_t buff[SAMPLE_BUFFER_SIZE];
+uint8_t bitbuff[BIT_BUFFER_SIZE];
+#define MIN_SAMPLES 10000 //about 250ms @ 39600Hz
 
 volatile uint16_t val;
 volatile uint8_t draBuff[100];
 volatile uint16_t adcSample;
 uint16_t neutralAdcValue; 
 
+volatile uint16_t sampleNumber;
+volatile uint8_t overflowCounter;
+
 interruptFlags_t interruptFlags;
+
+bool processedSignal = true;
 
 static inline void ledToggle(){
     gpio_put(LED_PIN, !gpio_get_out_level(LED_PIN));
@@ -30,20 +40,19 @@ static inline void ledToggle(){
 
 
 void adcCallback(void){
-    //ledToggle();
-
     adcSample = adc_fifo_get();
     adc_fifo_drain();
 
     int16_t diff = adcSample - neutralAdcValue;
 
-    if(ABS(diff) > 100) {
-        gpio_put(LED_PIN, true);
+    if(processedSignal) {
+        buff[sampleNumber++] = diff;
+     
+        if(sampleNumber == SAMPLE_BUFFER_SIZE) {
+            sampleNumber = 0;
+            ++overflowCounter;
+        }
     }
-    else {
-        gpio_put(LED_PIN, false);
-    }
-
 }
 
 
@@ -58,17 +67,21 @@ void on_uart_rx(){
 
 
 void squelchCallback(uint8_t gpio, uint32_t events){
-    if(GPIO_IRQ_EDGE_FALL == events) {
+    if(GPIO_IRQ_EDGE_FALL == events) { //detected a signal
         interruptFlags.signalDetected = 1;
-        adc_run(true);
+        if(processedSignal){
+            sampleNumber = 0;
+            gpio_put(LED_PIN, true);
+            adc_run(true);
+        }
     }
 
-    if(GPIO_IRQ_EDGE_RISE == events){
+    if(GPIO_IRQ_EDGE_RISE == events){ //signal ended
         interruptFlags.signalEnded = 1;
         adc_run(false);
         gpio_put(LED_PIN, false);
+        processedSignal = false;
     }
-
 }
 
 
@@ -110,21 +123,94 @@ void init(){
     
     // Now enable the UART to send interrupts - RX only
     uart_set_irq_enables(UART_DRA_ID, true, false);
+
+    
+
     sleep_ms(500);
-
-
 }
+
+
+
+void printAPRS(uint8_t bitbuff[], int datastartidx, int dataendidx){
+    printf("APRS DATA, datastartidx %d: \n", datastartidx);
+    int addressendidx = -1;
+    for(int i = datastartidx; i < dataendidx; i += 8){
+        uint8_t byte = getbyte(&bitbuff[i]);
+        bool lastaddressbyte = byte & 0x1;
+        byte = byte >> 1;
+        printf("%c", (char)byte);
+        if(lastaddressbyte) {
+            addressendidx = i + 8;
+            break;
+        }
+    } 
+
+    int aprsdataidx = 0;
+    for(int i = addressendidx; i < dataendidx; i+=8){
+        uint8_t byte = getbyte(&bitbuff[i]);
+        if(byte == 0x03){
+            byte = getbyte(&bitbuff[i + 8]);
+            if (byte == 0xF0){
+                aprsdataidx = i + 16;                
+                break;
+            } else {
+                printf("Error: Control field and protocol id found! \n");
+                break;
+            }
+        }
+
+        printf("%c", (char)byte); //print digipeater address if present
+    }
+
+    for(int i = aprsdataidx;  i < dataendidx; i += 8){
+        uint8_t byte = getbyte(&bitbuff[i]);
+        printf("%c", (char)byte);
+    }    
+}
+
+
+void reverse(int *array, int start, int end) {
+    while (start < end) {
+        int temp = array[start];
+        array[start] = array[end];
+        array[end] = temp;
+        start++;
+        end--;
+    }
+}
+
+void rearrangeArray(int *array, int sampleIdx, int buffsize) {
+    // Determine the number of elements to rotate
+    int rotateIdx = (sampleIdx) % buffsize;
+    
+    // If no rotation is needed, return
+    if (rotateIdx == 0) {
+        return;
+    }
+    
+    // Reverse the entire array
+    reverse(array, 0, buffsize - 1);
+    
+    // Reverse the first part of the array (from 0 to buffsize - rotateIdx - 1)
+    reverse(array, 0, buffsize - rotateIdx - 1);
+    
+    // Reverse the second part of the array (from buffsize - rotateIdx to buffsize - 1)
+    reverse(array, buffsize - rotateIdx, buffsize - 1);
+}
+
+
 
 int main()
 {
     init();
-    printf("Picoprobe 0.1\n");
+    printf("Picopeter 0.1\n");
     //uart_puts(UART_DRA_ID, "AT+DMOCONNECT\r\n");
     // Timer example code - This example fires off the callback after 2000ms
 
     neutralAdcValue = adc_read();
 
-    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144. 8000,144.8000,0000,1,0000\r\n");
+    //AT+DMOSETGROUP=GBW,TFV, RFV,Tx_CTCSS,SQ,Rx_CTCSS<
+    uart_puts(UART_DRA_ID, "AT+DMOSETGROUP=0,144.8000,144.8000,0000,1,0000\r\n");
     sleep_ms(100);
     uart_puts(UART_DRA_ID, "AT+DMOSETVOLUME=8\r\n");
 
@@ -139,25 +225,80 @@ int main()
     gpio_set_irq_enabled_with_callback( DRA_SQ_PIN, 
         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
         true,
-        squelchCallback
+        (gpio_irq_callback_t) squelchCallback
     );
 
 
-    
-
     while(1) {
 
-#if DEBUG_ON
+
         if(interruptFlags.signalDetected){
               interruptFlags.signalDetected = 0;
-            printf("Signal detected!\n");
+                //printf("Signal detected!\n");
+            
         }
 
         if(interruptFlags.signalEnded){
             interruptFlags.signalEnded = 0;
-            printf("Signal ended!\n");
+            //printf("Signal ended!\n");
         }
-#endif
+
+
+        if(!processedSignal){
+            if(sampleNumber > MIN_SAMPLES || overflowCounter > 0){
+                printf("Processing the signal, sampleidx at %d with overflowcounter at %d...\n", sampleNumber, overflowCounter);
+
+                if(overflowCounter > 0) {
+                    printf("Buffer overflowed, restoring index...");
+                    rearrangeArray(buff, sampleNumber, SAMPLE_BUFFER_SIZE);
+                    sampleNumber = SAMPLE_BUFFER_SIZE;
+                }
+
+                for(uint16_t i = 0; i < sampleNumber; ++i){
+                    printf("%d\n", buff[i]);
+                } 
+
+                runCorrelator(buff, sampleNumber, SAMPLE_RATE);
+
+                uint16_t numbits = getBits(bitbuff, buff, sampleNumber, SAMPLE_RATE);
+                reverseNRZI(bitbuff, numbits);
+
+                int datastartidx = getdatastartidx(bitbuff, numbits, 5);
+                printf("Data start idx: %d\n", datastartidx);
+                int dataendidx = getdataendidx(bitbuff, numbits, datastartidx);
+                printf("Initial dataendidx: %d\n", dataendidx);
+                dataendidx = removebitstuffing(bitbuff, datastartidx, dataendidx);
+                printf("Dataendidx after removing stuffed bits: %d\n", dataendidx);
+
+                printf("Found data start at: %d; Found data end at: %d\n", datastartidx, dataendidx);
+
+                printf("\n");
+
+                uint16_t crc = calc_crc(bitbuff, datastartidx, dataendidx - 16);
+
+                uint16_t actualcrc = getbyte(&bitbuff[dataendidx - 8]) << 8 | getbyte(&bitbuff[dataendidx - 16]);
+
+                if(crc == actualcrc) {
+                    printf("CRC matched! \n");
+                } else {
+                    printf("Error! CRC do not match, calc: %x, actual %x\n", crc, actualcrc);
+                }
+
+                printAPRS(bitbuff, datastartidx, dataendidx);
+
+                /*
+                printf("\nPrinting raw packet bytes: \n");
+                
+                for(int i = datastartidx; i < dataendidx; i+=8){
+                    printf("%x ", getbyte(&bitbuff[i]));
+                } */
+
+                printf("\nData ended\n", getbyte(&bitbuff[dataendidx + 1]));
+            }
+            processedSignal = true;
+            sampleNumber = 0;
+            overflowCounter = 0;
+        }
     }
 
     return 0;

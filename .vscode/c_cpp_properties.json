@@ -4,7 +4,7 @@
       "name": "Linux",
       "includePath": [
         "${workspaceFolder}/**",
-        "${env:PICO_SDK_PATH}/**",
+        "../pico-sdk/**",
         "./CMSIS/Core/Include/**",
         "./CMSIS/Device/Raspberry/RP2XXX/Include/**",
         "./CMSIS/DSP/Include/dsp/**"

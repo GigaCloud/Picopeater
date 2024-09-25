@@ -54,6 +54,8 @@ target_include_directories(Picopeater PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
 )
 
+add_library(ax25 "ax25.c" "ax25.h")
+
 # Add any user requested libraries
 target_link_libraries(Picopeater
         hardware_pio
@@ -63,7 +65,10 @@ target_link_libraries(Picopeater
         hardware_adc
         cmsis_core
         cmsis_dsp
+        ax25
         )
+
+
 
 pico_add_extra_outputs(Picopeater)
 

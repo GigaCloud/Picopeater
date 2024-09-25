@@ -15,10 +15,26 @@
 #define ADC_CH_AF_OUT 0
 #define ADC_AF_OUT_PIN (26 + ADC_CH_AF_OUT) //GPIO 26 - CH 0
 
-#define ADC_SAMPLING_RATE 44100 //Hz
+#define ADC_SAMPLING_RATE 39600//Hz
+
+#define MARK_SIZE 33
+#define SPACE_SIZE 18
+#define SAMPLE_RATE ADC_SAMPLING_RATE
+
+#define APRS_BAUD 1200
+#define MARK_FREQ 1200
+#define SPACE_FREQ 2200
+
+#define APRS_FLAG 0b01111110
+
+#define MARK_SIZE 33
+#define SPACE_SIZE 18
+
 
 #define ABS(X) (X >= 0? X : -X)
 
+#define true 1
+#define false 0 
 
 
 typedef union{
